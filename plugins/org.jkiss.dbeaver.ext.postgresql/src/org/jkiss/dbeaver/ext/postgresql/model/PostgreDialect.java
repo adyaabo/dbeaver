@@ -893,6 +893,7 @@ public class PostgreDialect extends JDBCSQLDialect implements TPRuleProvider, SQ
         removeSQLKeyword("LENGTH");
         removeSQLKeyword("JSON");
         removeSQLKeyword("TEXT");
+        removeSQLKeyword("FORMAT");
 
         if (dataSource instanceof PostgreDataSource) {
             serverExtension = ((PostgreDataSource) dataSource).getServerType();
