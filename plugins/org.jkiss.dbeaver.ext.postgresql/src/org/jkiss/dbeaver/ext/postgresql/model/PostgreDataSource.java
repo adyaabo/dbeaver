@@ -1,6 +1,6 @@
 /*
  * DBeaver - Universal Database Manager
- * Copyright (C) 2010-2024 DBeaver Corp and others
+ * Copyright (C) 2010-2025 DBeaver Corp and others
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,7 +94,7 @@ public class PostgreDataSource extends JDBCDataSource implements DBSInstanceCont
     private SettingCache settingCache;
     private String activeDatabaseName;
     private PostgreServerExtension serverExtension;
-    private String serverVersion;
+    protected String serverVersion;
     private volatile boolean hasStatistics;
     private boolean supportsEnumTable;
     private boolean supportsReltypeColumn = true;
@@ -482,6 +482,8 @@ public class PostgreDataSource extends JDBCDataSource implements DBSInstanceCont
         } finally {
             this.isConnectionRefreshing = false;
         }
+        getDefaultInstance().checkInstanceConnection(monitor, false);
+
         this.initialize(monitor);
 
         return this;
@@ -520,18 +522,15 @@ public class PostgreDataSource extends JDBCDataSource implements DBSInstanceCont
         if (instance != null) {
             log.debug("Initiate connection to " + getServerType().getServerTypeName() + " database [" + instance.getName() + "@" + conConfig.getHostName() + "] for " + purpose);
         }
-        boolean timezoneOverridden = false;
+        String currentTimezoneId = ZoneId.systemDefault().getId();
+        String legacyTimezoneOverridden = PostgreConstants.REPLACING_TIMEZONE.get(currentTimezoneId);
 
         try {
             // Old versions of postgres and some linux distributions, on which docker images are made, may not contain
             // new timezone, which will lead to the error while connecting, there is no way to know before connecting
             // so to be sure we will use the old name
-            if (PostgreConstants.NEW_UA_TIMEZONE.equals(TimeZone.getDefault().getID())) {
-                TimezoneRegistry.setDefaultZone(ZoneId.of(PostgreConstants.LEGACY_UA_TIMEZONE), false);
-                timezoneOverridden = true;
-            } else if (PostgreConstants.NEW_IST_TIMEZONE.equals(TimeZone.getDefault().getID())) {
-                TimezoneRegistry.setDefaultZone(ZoneId.of(PostgreConstants.LEGACY_IST_TIMEZONE), false);
-                timezoneOverridden = true;
+            if (legacyTimezoneOverridden != null) {
+                TimezoneRegistry.setDefaultZone(ZoneId.of(legacyTimezoneOverridden), false);
             }
 
             if (isReadDatabaseList(conConfig) || !CommonUtils.isEmpty(conConfig.getBootstrap().getDefaultCatalogName())) {
@@ -583,12 +582,8 @@ public class PostgreDataSource extends JDBCDataSource implements DBSInstanceCont
 
             throw e;
         } finally {
-            if (timezoneOverridden) {
-                if (PostgreConstants.LEGACY_UA_TIMEZONE.equals(TimeZone.getDefault().getID())) {
-                    TimezoneRegistry.setDefaultZone(ZoneId.of(PostgreConstants.NEW_UA_TIMEZONE), false);
-                } else if (PostgreConstants.LEGACY_IST_TIMEZONE.equals(TimeZone.getDefault().getID())) {
-                    TimezoneRegistry.setDefaultZone(ZoneId.of(PostgreConstants.NEW_IST_TIMEZONE), false);
-                }
+            if (legacyTimezoneOverridden != null) {
+                TimezoneRegistry.setDefaultZone(ZoneId.of(currentTimezoneId), false);
             }
         }
 
